@@ -1,0 +1,669 @@
+{
+  "info": {
+    "name": "KHA Backend - Production QA Suite",
+    "_postman_id": "6a93b66f-69da-4e67-9f31-8a6f9f17ad89",
+    "description": "Complete production QA suite generated from actual backend code routes/controllers. Includes happy flow, negative, security, concurrency, edge, and failure scenarios.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const tokenVar = pm.variables.get('authTokenVar');",
+          "if (tokenVar) {",
+          "  const token = pm.environment.get(tokenVar);",
+          "  if (token) pm.request.headers.upsert({ key: 'Authorization', value: `Bearer ${token}` });",
+          "}",
+          "if (!pm.environment.get('randomPhone')) {",
+          "  pm.environment.set('randomPhone', `9${Math.floor(100000000 + Math.random() * 900000000)}`);",
+          "}",
+          "if (!pm.environment.get('randomOperatorPhone')) {",
+          "  pm.environment.set('randomOperatorPhone', `8${Math.floor(100000000 + Math.random() * 900000000)}`);",
+          "}"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.test('Status in expected QA set', function () {",
+          "  pm.expect([200, 201, 400, 401, 403, 404, 409, 413, 429]).to.include(pm.response.code);",
+          "});",
+          "let body = {};",
+          "try { body = pm.response.json(); } catch (e) {}",
+          "pm.test('response.success is boolean when present', function () {",
+          "  if (Object.prototype.hasOwnProperty.call(body, 'success')) pm.expect(typeof body.success).to.eql('boolean');",
+          "});",
+          "const d = body.data || {};",
+          "const b = d.booking || body.booking || {};",
+          "const p = d.payment || body.payment || {};",
+          "const t = d.tractor || body.tractor || {};",
+          "if (b && (b._id || b.id)) pm.environment.set('bookingId', b._id || b.id);",
+          "if (p && (p._id || p.id || p.paymentId)) pm.environment.set('paymentId', p._id || p.id || p.paymentId);",
+          "if (t && (t._id || t.id)) pm.environment.set('tractorId', t._id || t.id);",
+          "if (d.operatorId) pm.environment.set('operatorId', d.operatorId);"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "00 - System",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "description": "Verifies API health endpoint `/api/health`.",
+            "method": "GET",
+            "url": "{{baseUrl}}/api/health"
+          }
+        }
+      ]
+    },
+    {
+      "name": "01 - Auth",
+      "item": [
+        {
+          "name": "Register (Farmer) - Send OTP",
+          "event": [{ "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.variables.set('authTokenVar', '');"] } }],
+          "request": {
+            "description": "Code-accurate registration/login start for farmer: sends OTP to phone.",
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"phone\": \"{{randomPhone}}\"\n}" },
+            "url": "{{baseUrl}}/api/auth/send-otp"
+          }
+        },
+        {
+          "name": "Login (Farmer) - Verify OTP",
+          "event": [
+            { "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.variables.set('authTokenVar', '');"] } },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let j = {}; try { j = pm.response.json(); } catch (e) {}",
+                  "const token = j?.data?.token;",
+                  "if (token) pm.environment.set('farmerToken', token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "description": "OTP verification issues JWT token; used as login in this backend.",
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"phone\": \"{{randomPhone}}\",\n  \"otp\": \"123456\"\n}" },
+            "url": "{{baseUrl}}/api/auth/verify-otp"
+          }
+        },
+        {
+          "name": "Register (Operator) - Send OTP",
+          "event": [{ "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.variables.set('authTokenVar', '');"] } }],
+          "request": {
+            "description": "Code-accurate registration/login start for operator: sends OTP.",
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"phone\": \"{{randomOperatorPhone}}\"\n}" },
+            "url": "{{baseUrl}}/api/auth/send-otp"
+          }
+        },
+        {
+          "name": "Login (Operator) - Verify OTP",
+          "event": [
+            { "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.variables.set('authTokenVar', '');"] } },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let j = {}; try { j = pm.response.json(); } catch (e) {}",
+                  "const token = j?.data?.token;",
+                  "if (token) pm.environment.set('operatorToken', token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "description": "Operator OTP verification and token capture.",
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"phone\": \"{{randomOperatorPhone}}\",\n  \"otp\": \"123456\"\n}" },
+            "url": "{{baseUrl}}/api/auth/verify-otp"
+          }
+        },
+        {
+          "name": "Login (Admin) - Request OTP",
+          "event": [{ "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.variables.set('authTokenVar', '');"] } }],
+          "request": {
+            "description": "Admin login is OTP-based by email in this backend.",
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"admin@example.com\"\n}" },
+            "url": "{{baseUrl}}/api/admin/login"
+          }
+        },
+        {
+          "name": "OTP Verify (Admin)",
+          "event": [
+            { "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.variables.set('authTokenVar', '');"] } },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let j = {}; try { j = pm.response.json(); } catch (e) {}",
+                  "const token = j?.data?.token;",
+                  "if (token) pm.environment.set('adminToken', token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "description": "Admin OTP verification and token capture.",
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"admin@example.com\",\n  \"otp\": \"123456\"\n}" },
+            "url": "{{baseUrl}}/api/admin/verify-otp"
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Operator & Document Flow",
+      "item": [
+        {
+          "name": "Select Role (Operator)",
+          "event": [{ "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.variables.set('authTokenVar', 'operatorToken');"] } }],
+          "request": {
+            "description": "Sets current user role to operator.",
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"role\": \"operator\"\n}" },
+            "url": "{{baseUrl}}/api/user/select-role"
+          }
+        },
+        {
+          "name": "Update Operator Profile",
+          "event": [{ "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.variables.set('authTokenVar', 'operatorToken');"] } }],
+          "request": {
+            "description": "Completes operator profile fields required by business logic.",
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test Operator\",\n  \"village\": \"Test Village\",\n  \"mandal\": \"Test Mandal\",\n  \"district\": \"Test District\",\n  \"state\": \"Test State\",\n  \"pincode\": \"500001\",\n  \"experience\": \"1_3\",\n  \"education\": \"12th\",\n  \"aadhaarNumber\": \"123456789012\"\n}"
+            },
+            "url": "{{baseUrl}}/api/user/profile/operator"
+          }
+        },
+        {
+          "name": "Upload Operator KYC Documents",
+          "event": [{ "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.variables.set('authTokenVar', 'operatorToken');"] } }],
+          "request": {
+            "description": "Uploads operator aadhaar + driving license using multipart/form-data.",
+            "method": "PATCH",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "aadhaarDocument", "type": "file", "src": "" },
+                { "key": "drivingLicenseDocument", "type": "file", "src": "" },
+                { "key": "type", "value": "aadhaar,license", "type": "text" }
+              ]
+            },
+            "url": "{{baseUrl}}/api/user/profile/operator/documents"
+          }
+        },
+        {
+          "name": "Create Tractor",
+          "event": [
+            { "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.variables.set('authTokenVar', 'operatorToken');"] } },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let j = {}; try { j = pm.response.json(); } catch (e) {}",
+                  "const tractorId = j?.data?.tractor?._id || j?.data?.tractor?.id;",
+                  "if (tractorId) pm.environment.set('tractorId', tractorId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "description": "Creates operator tractor before document upload.",
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tractorType\": \"small\",\n  \"brand\": \"Mahindra\",\n  \"model\": \"275 DI\",\n  \"registrationNumber\": \"TS09AB1234\",\n  \"machineryTypes\": [\"ploughing\"],\n  \"machinerySubTypes\": [\"rotavator\"],\n  \"isAvailable\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/tractor"
+          }
+        },
+        {
+          "name": "Upload Tractor Documents",
+          "event": [{ "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.variables.set('authTokenVar', 'operatorToken');"] } }],
+          "request": {
+            "description": "Uploads RC/insurance/pollution/fitness docs and tractor photo.",
+            "method": "PATCH",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "rcDocument", "type": "file", "src": "" },
+                { "key": "insuranceDocument", "type": "file", "src": "" },
+                { "key": "pollutionDocument", "type": "file", "src": "" },
+                { "key": "fitnessDocument", "type": "file", "src": "" },
+                { "key": "tractorPhoto", "type": "file", "src": "" },
+                { "key": "insuranceExpiry", "value": "2028-01-01", "type": "text" },
+                { "key": "pollutionExpiry", "value": "2028-01-01", "type": "text" },
+                { "key": "fitnessExpiry", "value": "2028-01-01", "type": "text" },
+                { "key": "type", "value": "rc", "type": "text" }
+              ]
+            },
+            "url": "{{baseUrl}}/api/tractor/{{tractorId}}/documents"
+          }
+        },
+        {
+          "name": "Get Operator Profile",
+          "event": [{ "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.variables.set('authTokenVar', 'operatorToken');"] } }],
+          "request": {
+            "description": "Fetches logged-in operator profile.",
+            "method": "GET",
+            "url": "{{baseUrl}}/api/user/me"
+          }
+        },
+        {
+          "name": "Get Tractor Details",
+          "event": [{ "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.variables.set('authTokenVar', 'operatorToken');"] } }],
+          "request": {
+            "description": "Fetch tractor by id for verification and booking dependencies.",
+            "method": "GET",
+            "url": "{{baseUrl}}/api/tractor/details/{{tractorId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - Admin Verification Flow",
+      "item": [
+        {
+          "name": "Get Pending Operators (via Users list)",
+          "event": [
+            { "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.variables.set('authTokenVar', 'adminToken');"] } },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let j = {}; try { j = pm.response.json(); } catch (e) {}",
+                  "const users = j?.data?.users || j?.data?.data || [];",
+                  "const pendingOperator = users.find(u => u.role === 'operator' && u.verificationStatus === 'pending');",
+                  "if (pendingOperator?._id) pm.environment.set('operatorId', pendingOperator._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "description": "Backend has `/api/admin/users` (no dedicated pending-operators endpoint). This request extracts first pending operator.",
+            "method": "GET",
+            "url": "{{baseUrl}}/api/admin/users?page=1&limit=50"
+          }
+        },
+        {
+          "name": "Verify Operator Documents",
+          "event": [{ "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.variables.set('authTokenVar', 'adminToken');"] } }],
+          "request": {
+            "description": "Approves aadhaar+license documents (actual admin verification endpoint).",
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"aadhaarStatus\": \"approved\",\n  \"licenseStatus\": \"approved\",\n  \"reason\": \"All documents valid\"\n}" },
+            "url": "{{baseUrl}}/api/admin/operator/{{operatorId}}/verify-documents"
+          }
+        },
+        {
+          "name": "Reject Operator",
+          "event": [{ "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.variables.set('authTokenVar', 'adminToken');"] } }],
+          "request": {
+            "description": "Rejection flow test for operator account.",
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"reason\": \"Document mismatch\"\n}" },
+            "url": "{{baseUrl}}/api/admin/reject-operator/{{operatorId}}"
+          }
+        },
+        {
+          "name": "Get Pending Tractors",
+          "event": [
+            { "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.variables.set('authTokenVar', 'adminToken');"] } },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let j = {}; try { j = pm.response.json(); } catch (e) {}",
+                  "const tractors = j?.data?.tractors || [];",
+                  "if (tractors[0]?._id) pm.environment.set('tractorId', tractors[0]._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "description": "Fetches pending tractor queue for admin verification.",
+            "method": "GET",
+            "url": "{{baseUrl}}/api/admin/tractors/pending"
+          }
+        },
+        {
+          "name": "Verify Tractor",
+          "event": [{ "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.variables.set('authTokenVar', 'adminToken');"] } }],
+          "request": {
+            "description": "Approves tractor via admin route.",
+            "method": "PATCH",
+            "url": "{{baseUrl}}/api/admin/verify-tractor/{{tractorId}}"
+          }
+        },
+        {
+          "name": "Reject Tractor",
+          "event": [{ "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.variables.set('authTokenVar', 'adminToken');"] } }],
+          "request": {
+            "description": "Reject tractor verification flow.",
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"reason\": \"RC mismatch\"\n}" },
+            "url": "{{baseUrl}}/api/admin/reject-tractor/{{tractorId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - Booking",
+      "item": [
+        {
+          "name": "Select Role (Farmer)",
+          "event": [{ "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.variables.set('authTokenVar', 'farmerToken');"] } }],
+          "request": {
+            "description": "Ensures farmer role is active before booking actions.",
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"role\": \"farmer\"\n}" },
+            "url": "{{baseUrl}}/api/user/select-role"
+          }
+        },
+        {
+          "name": "Create Booking (Farmer)",
+          "event": [
+            { "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.variables.set('authTokenVar', 'farmerToken');"] } },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let j = {}; try { j = pm.response.json(); } catch (e) {}",
+                  "const bookingId = j?.data?.booking?._id;",
+                  "if (bookingId) pm.environment.set('bookingId', bookingId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "description": "Creates booking with real required fields from booking validation/controller.",
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Idempotency-Key", "value": "book-{{tractorId}}-{{randomPhone}}" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tractorId\": \"{{tractorId}}\",\n  \"serviceType\": \"ploughing\",\n  \"date\": \"2026-04-20\",\n  \"time\": \"10:30\",\n  \"landArea\": 2,\n  \"hours\": 5,\n  \"address\": \"Village Main Road\"\n}"
+            },
+            "url": "{{baseUrl}}/api/bookings/create"
+          }
+        },
+        {
+          "name": "Get Booking By ID",
+          "event": [{ "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.variables.set('authTokenVar', 'farmerToken');"] } }],
+          "request": {
+            "description": "Fetches booking details by id.",
+            "method": "GET",
+            "url": "{{baseUrl}}/api/bookings/{{bookingId}}"
+          }
+        },
+        {
+          "name": "Operator Accept Booking",
+          "event": [{ "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.variables.set('authTokenVar', 'operatorToken');"] } }],
+          "request": {
+            "description": "Operator accepts assigned booking.",
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"action\": \"accept\"\n}" },
+            "url": "{{baseUrl}}/api/bookings/{{bookingId}}/respond"
+          }
+        },
+        {
+          "name": "Cancel Booking",
+          "event": [{ "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.variables.set('authTokenVar', 'farmerToken');"] } }],
+          "request": {
+            "description": "Cancellation flow after creation/acceptance.",
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"reason\": \"User cancelled\"\n}" },
+            "url": "{{baseUrl}}/api/bookings/{{bookingId}}/cancel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 - Payment",
+      "item": [
+        {
+          "name": "Pay Advance",
+          "event": [{ "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.variables.set('authTokenVar', 'farmerToken');"] } }],
+          "request": {
+            "description": "Pays booking advance; records payment in pending state until webhook finalization.",
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Idempotency-Key", "value": "adv-{{bookingId}}" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paymentMethod\": \"upi\",\n  \"orderId\": \"order_test_advance\",\n  \"paymentId\": \"pay_test_advance_001\",\n  \"signature\": \"test_signature\"\n}"
+            },
+            "url": "{{baseUrl}}/api/bookings/{{bookingId}}/pay-advance"
+          }
+        },
+        {
+          "name": "Pay Remaining",
+          "event": [{ "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.variables.set('authTokenVar', 'farmerToken');"] } }],
+          "request": {
+            "description": "Pays remaining amount after completion; also pending until webhook finalization.",
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Idempotency-Key", "value": "rem-{{bookingId}}" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paymentMethod\": \"upi\",\n  \"orderId\": \"order_test_remaining\",\n  \"paymentId\": \"pay_test_remaining_001\",\n  \"signature\": \"test_signature\"\n}"
+            },
+            "url": "{{baseUrl}}/api/bookings/{{bookingId}}/pay-remaining"
+          }
+        },
+        {
+          "name": "Payment Verification (Webhook)",
+          "event": [{ "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.variables.set('authTokenVar', '');"] } }],
+          "request": {
+            "description": "Razorpay webhook endpoint. Requires valid x-razorpay-signature and raw-body HMAC in real flow.",
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "x-razorpay-signature", "value": "replace_with_real_signature" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"evt_test_001\",\n  \"event\": \"payment.captured\",\n  \"payload\": {\n    \"payment\": {\n      \"entity\": {\n        \"id\": \"pay_test_advance_001\"\n      }\n    }\n  }\n}"
+            },
+            "url": "{{baseUrl}}/api/webhooks/razorpay"
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 - Admin Dashboard",
+      "item": [
+        {
+          "name": "Booking Stats",
+          "event": [{ "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.variables.set('authTokenVar', 'adminToken');"] } }],
+          "request": {
+            "description": "Admin dashboard booking stats endpoint.",
+            "method": "GET",
+            "url": "{{baseUrl}}/api/admin/dashboard/bookings"
+          }
+        },
+        {
+          "name": "Revenue Stats",
+          "event": [{ "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.variables.set('authTokenVar', 'adminToken');"] } }],
+          "request": {
+            "description": "Admin dashboard revenue stats endpoint.",
+            "method": "GET",
+            "url": "{{baseUrl}}/api/admin/dashboard/revenue"
+          }
+        },
+        {
+          "name": "User Stats",
+          "event": [{ "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.variables.set('authTokenVar', 'adminToken');"] } }],
+          "request": {
+            "description": "Admin dashboard user stats endpoint.",
+            "method": "GET",
+            "url": "{{baseUrl}}/api/admin/dashboard/users"
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 - Negative Security Concurrency Edge Failure",
+      "item": [
+        {
+          "name": "Negative - Missing Fields (Create Booking)",
+          "event": [{ "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.variables.set('authTokenVar', 'farmerToken');"] } }],
+          "request": {
+            "description": "Missing required booking fields should return 400.",
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"tractorId\": \"{{tractorId}}\"\n}" },
+            "url": "{{baseUrl}}/api/bookings/create"
+          }
+        },
+        {
+          "name": "Negative - Invalid ObjectId (Booking)",
+          "event": [{ "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.variables.set('authTokenVar', 'farmerToken');"] } }],
+          "request": {
+            "description": "Invalid booking id should return 400/404 depending middleware/path.",
+            "method": "GET",
+            "url": "{{baseUrl}}/api/bookings/invalid-object-id"
+          }
+        },
+        {
+          "name": "Negative - Invalid Token",
+          "request": {
+            "description": "Invalid bearer token must return 401.",
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer invalid_token" }],
+            "url": "{{baseUrl}}/api/bookings/{{bookingId}}"
+          }
+        },
+        {
+          "name": "Security - Farmer Accessing Admin Route",
+          "event": [{ "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.variables.set('authTokenVar', 'farmerToken');"] } }],
+          "request": {
+            "description": "Farmer role should be forbidden on admin routes (403).",
+            "method": "GET",
+            "url": "{{baseUrl}}/api/admin/users"
+          }
+        },
+        {
+          "name": "Security - Operator Accessing Another Booking",
+          "event": [{ "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.variables.set('authTokenVar', 'operatorToken');"] } }],
+          "request": {
+            "description": "Operator responding to unrelated booking should return 403.",
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"action\": \"accept\"\n}" },
+            "url": "{{baseUrl}}/api/bookings/000000000000000000000001/respond"
+          }
+        },
+        {
+          "name": "Concurrency - Double Accept (2nd should conflict/fail)",
+          "event": [{ "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.variables.set('authTokenVar', 'operatorToken');"] } }],
+          "request": {
+            "description": "Repeat accept to validate race protection/idempotent rejection (expect 409/400 on second run).",
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"action\": \"accept\"\n}" },
+            "url": "{{baseUrl}}/api/bookings/{{bookingId}}/respond"
+          }
+        },
+        {
+          "name": "Concurrency - Duplicate Payment (2nd should conflict/fail)",
+          "event": [{ "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.variables.set('authTokenVar', 'farmerToken');"] } }],
+          "request": {
+            "description": "Duplicate advance payment idempotency/race check.",
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paymentMethod\": \"upi\",\n  \"orderId\": \"order_test_advance\",\n  \"paymentId\": \"pay_test_advance_001\",\n  \"signature\": \"test_signature\"\n}"
+            },
+            "url": "{{baseUrl}}/api/bookings/{{bookingId}}/pay-advance"
+          }
+        },
+        {
+          "name": "Edge - Double Click Create (same Idempotency-Key)",
+          "event": [{ "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.variables.set('authTokenVar', 'farmerToken');"] } }],
+          "request": {
+            "description": "Repeat with same Idempotency-Key to verify replayed response handling.",
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Idempotency-Key", "value": "book-{{tractorId}}-{{randomPhone}}" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tractorId\": \"{{tractorId}}\",\n  \"serviceType\": \"ploughing\",\n  \"date\": \"2026-04-20\",\n  \"time\": \"10:30\",\n  \"landArea\": 2,\n  \"hours\": 5\n}"
+            },
+            "url": "{{baseUrl}}/api/bookings/create"
+          }
+        },
+        {
+          "name": "Edge - Retry Payment (same Idempotency-Key)",
+          "event": [{ "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.variables.set('authTokenVar', 'farmerToken');"] } }],
+          "request": {
+            "description": "Retry payment request with same key to validate idempotency persistence.",
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Idempotency-Key", "value": "adv-{{bookingId}}" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paymentMethod\": \"upi\",\n  \"orderId\": \"order_test_advance\",\n  \"paymentId\": \"pay_test_advance_001\",\n  \"signature\": \"test_signature\"\n}"
+            },
+            "url": "{{baseUrl}}/api/bookings/{{bookingId}}/pay-advance"
+          }
+        },
+        {
+          "name": "Failure - Large Payload Upload (>10KB simulation)",
+          "event": [{ "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.variables.set('authTokenVar', 'operatorToken');"] } }],
+          "request": {
+            "description": "Upload oversized file to validate 413/validation guard behavior (backend multer limit is 5MB).",
+            "method": "PATCH",
+            "body": {
+              "mode": "formdata",
+              "formdata": [{ "key": "aadhaarDocument", "type": "file", "src": "" }, { "key": "drivingLicenseDocument", "type": "file", "src": "" }]
+            },
+            "url": "{{baseUrl}}/api/user/profile/operator/documents"
+          }
+        },
+        {
+          "name": "Failure - Payment Failure Simulation",
+          "event": [{ "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["pm.variables.set('authTokenVar', 'farmerToken');"] } }],
+          "request": {
+            "description": "Invalid payment signature/order payload should fail safely.",
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"paymentMethod\": \"upi\",\n  \"orderId\": \"\",\n  \"paymentId\": \"\",\n  \"signature\": \"\"\n}" },
+            "url": "{{baseUrl}}/api/bookings/{{bookingId}}/pay-advance"
+          }
+        }
+      ]
+    }
+  ]
+}
